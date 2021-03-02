@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 The OpenZipkin Authors
+ * Copyright 2015-2021 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -39,7 +39,7 @@ public final class DependencyLinker {
   final Logger logger;
   final SpanNode.Builder builder;
   //   Pair --> left is parent, right is child
-  // value : long[] --> long[0] --> count, long [1] time in mills.
+  // value : long[] --> long[0] --> count, long [1] time in micros.
   final Map<Pair, Long[]> callCounts = new LinkedHashMap<Pair, Long[]>();
   final Map<Pair, Long[]> errorCounts = new LinkedHashMap<Pair, Long[]>();
 
@@ -113,7 +113,7 @@ public final class DependencyLinker {
         if (parent == null || child == null) {
           logger.fine("cannot link messaging span to its broker; skipping");
         } else {
-          addLink(parent, child, currentSpan.duration(), isError);
+          addLink(parent, child, currentSpan.durationAsLong(), isError);
         }
         continue;
       }
@@ -127,7 +127,7 @@ public final class DependencyLinker {
         // Check for this and backfill a link from the nearest remote to that service as necessary.
         if (kind == Kind.CLIENT && serviceName != null && !remoteAncestorName.equals(serviceName)) {
           logger.fine("detected missing link to client span");
-          addLink(remoteAncestorName, serviceName, currentSpan.duration(), false); // we don't know if there's an error here
+          addLink(remoteAncestorName, serviceName, currentSpan.durationAsLong(), false); // we don't know if there's an error here
         }
 
         if (kind == Kind.SERVER || parent == null) parent = remoteAncestorName;
@@ -145,7 +145,7 @@ public final class DependencyLinker {
         continue;
       }
 
-      addLink(parent, child, currentSpan.duration(), isError);
+      addLink(parent, child, currentSpan.durationAsLong(), isError);
     }
     return this;
   }
@@ -163,7 +163,7 @@ public final class DependencyLinker {
     return null;
   }
 
-  void addLink(String parent, String child, long timeCostInMills, boolean isError) {
+  void addLink(String parent, String child, long timeCostInMicros, boolean isError) {
     if (logger.isLoggable(FINE)) {
       logger.fine("incrementing " + (isError ? "error " : "") + "link " + parent + " -> " + child);
     }
@@ -171,9 +171,9 @@ public final class DependencyLinker {
     Long [] vs = callCounts.get(key);
     if (vs != null) {
       vs[0] += vs[0];
-      vs[1] += timeCostInMills;
+      vs[1] += timeCostInMicros;
     } else {
-      vs = new Long[] {1l, timeCostInMills};
+      vs = new Long[] {1l, timeCostInMicros};
       callCounts.put(key, vs);
     }
     if (!isError) return;
@@ -181,9 +181,9 @@ public final class DependencyLinker {
     vs = errorCounts.get(key);
     if (vs != null) {
       vs[0] += vs[0];
-      vs[1] += timeCostInMills;
+      vs[1] += timeCostInMicros;
     } else {
-      vs = new Long[] {1l, timeCostInMills};
+      vs = new Long[] {1l, timeCostInMicros};
       errorCounts.put(key, vs);
     }
   }
@@ -220,9 +220,9 @@ public final class DependencyLinker {
         .parent(parentChild.left)
         .child(parentChild.right)
         .callCount(entry.getValue()[0])
-        .callTimeInMillis(entry.getValue()[1])
+        .callTimeInMicros(entry.getValue()[1])
         .errorCount(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild)[0] : 0L)
-        .errorTimeInMills(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild)[1] : 0L)
+        .errorTimeInMicros(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild)[1] : 0L)
         .build());
     }
     return result;

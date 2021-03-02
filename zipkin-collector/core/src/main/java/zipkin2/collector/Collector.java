@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 The OpenZipkin Authors
+ * Copyright 2015-2021 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,12 +13,6 @@
  */
 package zipkin2.collector;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import zipkin2.Callback;
@@ -28,8 +22,14 @@ import zipkin2.codec.BytesDecoder;
 import zipkin2.codec.SpanBytesDecoder;
 import zipkin2.storage.StorageComponent;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.function.Supplier;
+
 import static java.lang.String.format;
-import static java.util.logging.Level.FINE;
 import static zipkin2.Call.propagateIfFatal;
 
 /**
@@ -41,7 +41,7 @@ import static zipkin2.Call.propagateIfFatal;
  * threads.
  */
 public class Collector { // not final for mock
-  static final Callback<Void> NOOP_CALLBACK = new Callback<Void>() {
+  public static final Callback<Void> NOOP_CALLBACK = new Callback<Void>() {
     @Override public void onSuccess(Void value) {
     }
 

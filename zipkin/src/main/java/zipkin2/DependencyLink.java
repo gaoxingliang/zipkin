@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2019 The OpenZipkin Authors
+ * Copyright 2015-2021 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -52,6 +52,14 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
     return errorCount;
   }
 
+  public long errorTimeInMicros() {
+    return errorTimeInMicros;
+  }
+
+  public long callTimeInMicros() {
+    return callTimeInMicros;
+  }
+
   public Builder toBuilder() {
     return new Builder(this);
   }
@@ -59,7 +67,7 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
   public static final class Builder {
     String parent, child;
     long callCount, errorCount;
-    long callTimeInMills, errorTimeInMills;
+    long callTimeInMicros, errorTimeInMicros;
 
     Builder() {
     }
@@ -93,13 +101,13 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
       return this;
     }
 
-    public Builder callTimeInMillis(long callTimeInMillis) {
-      this.callTimeInMills = callTimeInMillis;
+    public Builder callTimeInMicros(long callTimeInMicros) {
+      this.callTimeInMicros = callTimeInMicros;
       return this;
     }
 
-    public Builder errorTimeInMills(long errorTimeInMills) {
-      this.errorTimeInMills = errorTimeInMills;
+    public Builder errorTimeInMicros(long errorTimeInMicros) {
+      this.errorTimeInMicros = errorTimeInMicros;
       return this;
     }
 
@@ -121,15 +129,15 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
   // See https://github.com/openzipkin/zipkin/issues/1879
   final String parent, child;
   final long callCount, errorCount;
-  final long errorTimeInMills, callTimeInMills;
+  final long errorTimeInMicros, callTimeInMicros;
 
   DependencyLink(Builder builder) {
     parent = builder.parent;
     child = builder.child;
     callCount = builder.callCount;
     errorCount = builder.errorCount;
-    callTimeInMills = builder.callTimeInMills;
-    errorTimeInMills = builder.errorTimeInMills;
+    callTimeInMicros = builder.callTimeInMicros;
+    errorTimeInMicros = builder.errorTimeInMicros;
   }
 
   @Override public boolean equals(Object o) {
