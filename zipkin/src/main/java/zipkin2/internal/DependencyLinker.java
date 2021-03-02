@@ -13,15 +13,16 @@
  */
 package zipkin2.internal;
 
+import zipkin2.DependencyLink;
+import zipkin2.Span;
+import zipkin2.Span.Kind;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import zipkin2.DependencyLink;
-import zipkin2.Span;
-import zipkin2.Span.Kind;
 
 import static java.util.logging.Level.FINE;
 
@@ -37,8 +38,10 @@ import static java.util.logging.Level.FINE;
 public final class DependencyLinker {
   final Logger logger;
   final SpanNode.Builder builder;
-  final Map<Pair, Long> callCounts = new LinkedHashMap<Pair, Long>();
-  final Map<Pair, Long> errorCounts = new LinkedHashMap<Pair, Long>();
+  //   Pair --> left is parent, right is child
+  // value : long[] --> long[0] --> count, long [1] time in mills.
+  final Map<Pair, Long[]> callCounts = new LinkedHashMap<Pair, Long[]>();
+  final Map<Pair, Long[]> errorCounts = new LinkedHashMap<Pair, Long[]>();
 
   public DependencyLinker() {
     this(Logger.getLogger(DependencyLinker.class.getName()));
@@ -110,7 +113,7 @@ public final class DependencyLinker {
         if (parent == null || child == null) {
           logger.fine("cannot link messaging span to its broker; skipping");
         } else {
-          addLink(parent, child, isError);
+          addLink(parent, child, currentSpan.duration(), isError);
         }
         continue;
       }
@@ -124,7 +127,7 @@ public final class DependencyLinker {
         // Check for this and backfill a link from the nearest remote to that service as necessary.
         if (kind == Kind.CLIENT && serviceName != null && !remoteAncestorName.equals(serviceName)) {
           logger.fine("detected missing link to client span");
-          addLink(remoteAncestorName, serviceName, false); // we don't know if there's an error here
+          addLink(remoteAncestorName, serviceName, currentSpan.duration(), false); // we don't know if there's an error here
         }
 
         if (kind == Kind.SERVER || parent == null) parent = remoteAncestorName;
@@ -142,7 +145,7 @@ public final class DependencyLinker {
         continue;
       }
 
-      addLink(parent, child, isError);
+      addLink(parent, child, currentSpan.duration(), isError);
     }
     return this;
   }
@@ -160,21 +163,28 @@ public final class DependencyLinker {
     return null;
   }
 
-  void addLink(String parent, String child, boolean isError) {
+  void addLink(String parent, String child, long timeCostInMills, boolean isError) {
     if (logger.isLoggable(FINE)) {
       logger.fine("incrementing " + (isError ? "error " : "") + "link " + parent + " -> " + child);
     }
     Pair key = new Pair(parent, child);
-    if (callCounts.containsKey(key)) {
-      callCounts.put(key, callCounts.get(key) + 1);
+    Long [] vs = callCounts.get(key);
+    if (vs != null) {
+      vs[0] += vs[0];
+      vs[1] += timeCostInMills;
     } else {
-      callCounts.put(key, 1L);
+      vs = new Long[] {1l, timeCostInMills};
+      callCounts.put(key, vs);
     }
     if (!isError) return;
-    if (errorCounts.containsKey(key)) {
-      errorCounts.put(key, errorCounts.get(key) + 1);
+
+    vs = errorCounts.get(key);
+    if (vs != null) {
+      vs[0] += vs[0];
+      vs[1] += timeCostInMills;
     } else {
-      errorCounts.put(key, 1L);
+      vs = new Long[] {1l, timeCostInMills};
+      errorCounts.put(key, vs);
     }
   }
 
@@ -184,36 +194,40 @@ public final class DependencyLinker {
 
   /** links are merged by mapping to parent/child and summing corresponding links */
   public static List<DependencyLink> merge(Iterable<DependencyLink> in) {
-    Map<Pair, Long> callCounts = new LinkedHashMap<Pair, Long>();
-    Map<Pair, Long> errorCounts = new LinkedHashMap<Pair, Long>();
-
-    for (DependencyLink link : in) {
-      Pair parentChild = new Pair(link.parent(), link.child());
-      long callCount = callCounts.containsKey(parentChild) ? callCounts.get(parentChild) : 0L;
-      callCount += link.callCount();
-      callCounts.put(parentChild, callCount);
-      long errorCount = errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild) : 0L;
-      errorCount += link.errorCount();
-      errorCounts.put(parentChild, errorCount);
-    }
-
-    return link(callCounts, errorCounts);
+  throw new IllegalStateException("Not impl");
+    //    Map<Pair, Long[]> callCounts = new LinkedHashMap<Pair, Long>();
+//    Map<Pair, Long[]> errorCounts = new LinkedHashMap<Pair, Long>();
+//
+//    for (DependencyLink link : in) {
+//      Pair parentChild = new Pair(link.parent(), link.child());
+//      long callCount = callCounts.containsKey(parentChild) ? callCounts.get(parentChild) : 0L;
+//      callCount += link.callCount();
+//      callCounts.put(parentChild, callCount);
+//      long errorCount = errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild) : 0L;
+//      errorCount += link.errorCount();
+//      errorCounts.put(parentChild, errorCount);
+//    }
+//
+//    return link(callCounts, errorCounts);
   }
 
-  static List<DependencyLink> link(Map<Pair, Long> callCounts,
-    Map<Pair, Long> errorCounts) {
+  static List<DependencyLink> link(Map<Pair, Long[]> callCounts,
+    Map<Pair, Long[]> errorCounts) {
     List<DependencyLink> result = new ArrayList<DependencyLink>(callCounts.size());
-    for (Map.Entry<Pair, Long> entry : callCounts.entrySet()) {
+    for (Map.Entry<Pair, Long[]> entry : callCounts.entrySet()) {
       Pair parentChild = entry.getKey();
       result.add(DependencyLink.newBuilder()
         .parent(parentChild.left)
         .child(parentChild.right)
-        .callCount(entry.getValue())
-        .errorCount(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild) : 0L)
+        .callCount(entry.getValue()[0])
+        .callTimeInMillis(entry.getValue()[1])
+        .errorCount(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild)[0] : 0L)
+        .errorTimeInMills(errorCounts.containsKey(parentChild) ? errorCounts.get(parentChild)[1] : 0L)
         .build());
     }
     return result;
   }
+
 
   static final class Pair {
     final String left, right;

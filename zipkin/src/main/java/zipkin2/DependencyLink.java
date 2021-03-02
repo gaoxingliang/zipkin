@@ -13,13 +13,14 @@
  */
 package zipkin2;
 
+import zipkin2.codec.DependencyLinkBytesDecoder;
+import zipkin2.codec.DependencyLinkBytesEncoder;
+
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.io.StreamCorruptedException;
 import java.nio.charset.Charset;
 import java.util.Locale;
-import zipkin2.codec.DependencyLinkBytesDecoder;
-import zipkin2.codec.DependencyLinkBytesEncoder;
 
 //@Immutable
 public final class DependencyLink implements Serializable { // for Spark and Flink jobs
@@ -58,6 +59,7 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
   public static final class Builder {
     String parent, child;
     long callCount, errorCount;
+    long callTimeInMills, errorTimeInMills;
 
     Builder() {
     }
@@ -91,6 +93,17 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
       return this;
     }
 
+    public Builder callTimeInMillis(long callTimeInMillis) {
+      this.callTimeInMills = callTimeInMillis;
+      return this;
+    }
+
+    public Builder errorTimeInMills(long errorTimeInMills) {
+      this.errorTimeInMills = errorTimeInMills;
+      return this;
+    }
+
+
     public DependencyLink build() {
       String missing = "";
       if (parent == null) missing += " parent";
@@ -108,12 +121,15 @@ public final class DependencyLink implements Serializable { // for Spark and Fli
   // See https://github.com/openzipkin/zipkin/issues/1879
   final String parent, child;
   final long callCount, errorCount;
+  final long errorTimeInMills, callTimeInMills;
 
   DependencyLink(Builder builder) {
     parent = builder.parent;
     child = builder.child;
     callCount = builder.callCount;
     errorCount = builder.errorCount;
+    callTimeInMills = builder.callTimeInMills;
+    errorTimeInMills = builder.errorTimeInMills;
   }
 
   @Override public boolean equals(Object o) {
